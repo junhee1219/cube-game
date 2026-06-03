@@ -2,7 +2,15 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#fdf6e3">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Cube Snake">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>🐍 Cube Snake</title>
 <style>
   :root {
@@ -750,6 +758,11 @@ if (typeof module !== 'undefined') {
 
   // 첫 화면: 큐브가 보이도록 초기 상태만 렌더
   reset();
+
+  // PWA 서비스 워커 등록 (http/https에서만 — 파일로 직접 열면 건너뜀)
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
 
   // 테스트/디버그용 훅
   window.__debug = () => ({ snake, dir, normal, foodPos, score, speed, alive });
