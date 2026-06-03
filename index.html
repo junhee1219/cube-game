@@ -33,9 +33,9 @@
 
   /* ── 상단 점수 ── */
   #hud {
-    margin-top: 18px; font-size: 26px; font-weight: 700; color: #8d6e63;
-    background: #fff; padding: 8px 26px; border-radius: 999px;
-    box-shadow: 0 4px 0 #ecdcc3; z-index: 10;
+    margin-top: 18px; font-size: 22px; font-weight: 700; color: #8d6e63;
+    background: #fff; padding: 8px 22px; border-radius: 999px;
+    box-shadow: 0 4px 0 #ecdcc3; z-index: 10; white-space: nowrap;
   }
 
   /* ── 3D 씬 ── */
@@ -183,7 +183,8 @@
     100% { box-shadow: 0 4px 0 #ecdcc3, 0 0 14px 4px #ff8a80; color: #e57373; }
   }
   @keyframes hudpop { 0% { transform: scale(1); } 40% { transform: scale(1.3) rotate(-3deg); } 100% { transform: scale(1); } }
-  #hud .sep { margin: 0 10px; color: #d7c4a3; }
+  #hud .sep { margin: 0 8px; color: #d7c4a3; }
+  @media (max-width: 480px) { #hud { font-size: 18px; padding: 7px 16px; } #hud .sep { margin: 0 6px; } }
 
   /* ── 콤보 배지 ── */
   #combo {
@@ -249,7 +250,7 @@
 </style>
 </head>
 <body>
-  <div id="hud">🍎 <span id="score">0</span><span class="sep">·</span>👑 <span id="best">0</span></div>
+  <div id="hud">🍎 <span id="fruits-n">0</span><span class="sep">·</span>⭐ <span id="score">0</span><span class="sep">·</span>👑 <span id="best">0</span></div>
   <div id="combo">🔥 x<span id="combo-n">2</span></div>
   <button id="mute" aria-label="소리 켜기/끄기">🔊</button>
   <div id="scene"><div id="cube"></div></div>
@@ -540,6 +541,7 @@ if (typeof module !== 'undefined') {
     camTarget = qmul(Q_TILT, cameraTarget(normal, dir));
     camQuat = [...camTarget]; // 시작 시 즉시 정렬
     document.getElementById('score').textContent = '0';
+    document.getElementById('fruits-n').textContent = '0';
     document.getElementById('hud').classList.remove('hype', 'pop');
     render();
   }
@@ -606,6 +608,7 @@ if (typeof module !== 'undefined') {
       score += gained; fruits++; growing += 1; yumTicks = 3;
       speed = Math.max(110, 230 - 5 * fruits); // 속도는 과일 개수 기준 (콤보 무관)
       document.getElementById('score').textContent = score;
+      document.getElementById('fruits-n').textContent = fruits;
       updateCombo();
       (wasGolden ? SFX.golden : SFX.eat)(combo);
       placeFood();
