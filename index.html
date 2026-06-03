@@ -742,11 +742,17 @@ if (typeof module !== 'undefined') {
   }
 
   // ───────────────────────── 사운드 (Web Audio 합성음) ─────────────────────────
-  let actx = null;
+  let actx = null, masterGain = null;
   let muted = localStorage.getItem('cubeSnakeMuted') === '1';
   function ensureAudio() {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
+    if (!actx) {
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      // 모든 소리가 마스터 게인을 거침 → 음소거 시 예약된 소리까지 즉시 차단
+      masterGain = actx.createGain();
+      masterGain.gain.value = muted ? 0 : 1;
+      masterGain.connect(actx.destination);
+    }
+    if (actx.state === 'suspended' && !muted) actx.resume();
   }
   function tone(freq, dur = 0.1, { type = 'sine', vol = 0.18, when = 0, slide = 0 } = {}) {
     if (muted || !actx) return;
@@ -757,7 +763,7 @@ if (typeof module !== 'undefined') {
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
     g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g).connect(actx.destination);
+    o.connect(g).connect(masterGain);
     o.start(t); o.stop(t + dur + 0.02);
   }
   const SFX = {
@@ -777,7 +783,15 @@ if (typeof module !== 'undefined') {
     muted = !muted;
     localStorage.setItem('cubeSnakeMuted', muted ? '1' : '0');
     muteBtn.textContent = muted ? '🔇' : '🔊';
-    if (!muted) { ensureAudio(); SFX.eat(1); }
+    if (muted) {
+      // 재생 중·예약된 소리까지 전부 즉시 끔
+      if (masterGain) masterGain.gain.value = 0;
+      if (actx) actx.suspend();
+    } else {
+      ensureAudio();
+      if (masterGain) masterGain.gain.value = 1;
+      SFX.eat(1);
+    }
   });
 
   // ───────────────────────── 먹기 이펙트 ─────────────────────────
@@ -922,7 +936,8 @@ if (typeof module !== 'undefined') {
   }
 
   // 테스트/디버그용 훅
-  window.__debug = () => ({ snake, dir, normal, foodPos, score, speed, alive, fruits, combo, maxCombo, isGolden });
+  window.__debug = () => ({ snake, dir, normal, foodPos, score, speed, alive, fruits, combo, maxCombo, isGolden,
+    audio: { muted, state: actx && actx.state, masterVol: masterGain && masterGain.gain.value } });
   window.__testFx = (s) => { score = s; document.getElementById('score').textContent = s; render(); eatEffect(); };
   window.__testOver = (s, f = s) => { score = s; fruits = f; gameOver(); };
 })();
