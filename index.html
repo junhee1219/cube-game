@@ -242,6 +242,19 @@
   }
   #overlay button:active { transform: translateY(4px); box-shadow: 0 2px 0 #94bf69; }
 
+  /* ── 간식 사주기 (게임오버 화면에만, 은은하게) ── */
+  #snack { display: none; margin-top: 22px; font-size: 13px; color: #bcaaa4; }
+  #overlay.gameover #snack { display: block; }
+  #snack .snack-btns { margin-left: 6px; }
+  #snack a {
+    display: inline-block; text-decoration: none; font-weight: 700; font-size: 12px;
+    padding: 4px 12px; border-radius: 999px; margin-left: 4px;
+    opacity: .85; transition: opacity .15s, transform .15s;
+  }
+  #snack a:hover { opacity: 1; transform: translateY(-1px); }
+  #snack a.toss { background: #3182f6; color: #fff; }
+  #snack a.kakao { background: #fee500; color: #3c1e1e; }
+
   @media (max-width: 480px) {
     :root { --cube: 270px; }
     .cell .fruit { font-size: 22px; }
@@ -263,6 +276,13 @@
     <h1>🐍 Cube Snake</h1>
     <p>큐브 위를 기어다니며 과일을 냠냠!<br>↺ ↻ 버튼이나 ← → 키로 방향을 바꿔요</p>
     <button id="btn-start">시작!</button>
+    <div id="snack">
+      <span class="snack-label">재밌었다면 개발자 간식 사주기</span> 🍩
+      <span class="snack-btns">
+        <a class="toss" href="supertoss://send?bank=토스뱅크&accountNo=100025266940&amount=3000">토스</a>
+        <a class="kakao" href="https://qr.kakaopay.com/FP0dZW9ip" target="_blank" rel="noopener">카카오페이</a>
+      </span>
+    </div>
   </div>
 
 <script>
@@ -676,6 +696,7 @@ if (typeof module !== 'undefined') {
       m +
       (maxCombo >= 2 ? `<br><span class="sub">최대 콤보 🔥x${maxCombo} · 과일 ${fruits}개</span>` : '');
     ov.querySelector('button').textContent = '다시 하기!';
+    ov.classList.add('gameover'); // 간식 사주기 노출
     setTimeout(() => ov.classList.remove('hidden'), 700);
   }
 
