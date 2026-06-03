@@ -1,5 +1,5 @@
 // Cube Snake 서비스 워커 — 게임 업데이트 배포 시 CACHE 버전을 올릴 것
-const CACHE = 'cube-snake-v1';
+const CACHE = 'cube-snake-v2';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', (e) => {
