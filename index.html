@@ -533,8 +533,12 @@ if (typeof module !== 'undefined') {
     }
     camTarget = best;
   }
-  function camFrame() {
-    camQuat = slerp(camQuat, camTarget, 0.10);
+  let lastFrameTs = 0;
+  function camFrame(ts) {
+    // 시간 기반 보간: 프레임레이트와 무관하게 ~200ms 안에 수렴 (즉각적인 조작감)
+    const dt = lastFrameTs ? Math.min(ts - lastFrameTs, 100) : 16;
+    lastFrameTs = ts;
+    camQuat = slerp(camQuat, camTarget, 1 - Math.exp(-dt / 70));
     const m = matrixFromQuat(camQuat);
     cubeEl.style.transform = `matrix3d(${m[0][0]},${m[1][0]},${m[2][0]},0,${m[0][1]},${m[1][1]},${m[2][1]},0,${m[0][2]},${m[1][2]},${m[2][2]},0,0,0,0,1)`;
     requestAnimationFrame(camFrame);
@@ -553,7 +557,7 @@ if (typeof module !== 'undefined') {
     normal = [...FACES[startFace].n];
     dir = [0, -1, 0]; // 위쪽으로 출발
     snake = [posOf(startFace, 2, 3), posOf(startFace, 3, 3), posOf(startFace, 4, 3)];
-    score = 0; speed = 230; turnQueue = []; alive = true; growing = 0; yumTicks = 0; turnedThisTick = false; tickCount = 0;
+    score = 0; speed = 200; turnQueue = []; alive = true; growing = 0; yumTicks = 0; turnedThisTick = false; tickCount = 0;
     fruits = 0; combo = 1; comboDeadline = 0; maxCombo = 1; isGolden = false;
     updateCombo();
     placeFood();
@@ -563,6 +567,7 @@ if (typeof module !== 'undefined') {
     document.getElementById('score').textContent = '0';
     document.getElementById('fruits-n').textContent = '0';
     document.getElementById('hud').classList.remove('hype', 'pop');
+    clearAllCells(); // 이전 판 흔적 전체 제거 (이후엔 차등 렌더링)
     render();
   }
 
@@ -626,7 +631,7 @@ if (typeof module !== 'undefined') {
       if (combo > maxCombo) maxCombo = combo;
       gained = (wasGolden ? 3 : 1) * combo;
       score += gained; fruits++; growing += 1; yumTicks = 3;
-      speed = Math.max(110, 230 - 5 * fruits); // 속도는 과일 개수 기준 (콤보 무관)
+      speed = Math.max(110, 200 - 5 * fruits); // 속도는 과일 개수 기준 (콤보 무관)
       document.getElementById('score').textContent = score;
       document.getElementById('fruits-n').textContent = fruits;
       updateCombo();
@@ -701,17 +706,29 @@ if (typeof module !== 'undefined') {
   }
 
   // ───────────────────────── 렌더링 ─────────────────────────
-  function render() {
-    // 셀 초기화
+  // 차등 렌더링: 직전에 그린 셀만 지움 (216칸 전체 갱신 방지 → 버벅임 감소,
+  // 과일 요소는 위치가 바뀔 때만 재생성 → 통통 애니메이션 리셋 방지)
+  let dirtyCells = [], fruitEl = null, fruitSig = '', glowEl = null;
+  function clearCell(c) {
+    c.className = c.className.replace(/ (body|head|sparkle)/g, '');
+    c.style.removeProperty('--seg');
+    c.style.removeProperty('--dly');
+    const sf = c.querySelector('.snake-face');
+    if (sf) sf.remove();
+  }
+  function clearAllCells() {
     for (const { cells, edges } of Object.values(faceEls)) {
-      for (const c of cells) {
-        c.className = c.className.replace(/ (body|head|sparkle)/g, '');
-        c.innerHTML = '';
-        c.style.removeProperty('--seg');
-        c.style.removeProperty('--dly');
-      }
+      for (const c of cells) clearCell(c);
       for (const e of Object.values(edges)) e.classList.remove('on');
     }
+    dirtyCells = [];
+    if (fruitEl) { fruitEl.remove(); fruitEl = null; }
+    fruitSig = ''; glowEl = null;
+  }
+
+  function render() {
+    for (const c of dirtyCells) clearCell(c);
+    dirtyCells = [];
     // 뱀 스킨: ~5 기본 / 6~15 과일마다 색 변경 / 16~25 흐르는 색 / 26~ 무지개 반짝
     const tier = score >= 26 ? 3 : score >= 16 ? 2 : score >= 6 ? 1 : 0;
     const hueBase = (tickCount * 14) % 360;
@@ -732,12 +749,14 @@ if (typeof module !== 'undefined') {
       const el = cellEl(cellOf(snake[i]));
       el.className += ' body';
       applySkin(el, i);
+      dirtyCells.push(el);
     }
     // 머리 + 표정
     const headCell = cellOf(snake[0]);
     const hEl = cellEl(headCell);
     hEl.className += ' head';
     applySkin(hEl, 0);
+    dirtyCells.push(hEl);
     const f = FACES[headCell.face];
     const lu = dir[0]*f.u[0] + dir[1]*f.u[1] + dir[2]*f.u[2];
     const lv = dir[0]*f.v[0] + dir[1]*f.v[1] + dir[2]*f.v[2];
@@ -747,21 +766,31 @@ if (typeof module !== 'undefined') {
     faceDiv.style.transform = `rotate(${angle}deg)`;
     faceDiv.innerHTML = '<div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="blush"><div class="cheek"></div><div class="cheek"></div></div>';
     hEl.appendChild(faceDiv);
-    // 먹이
-    const fc = cellOf(foodPos);
-    const fEl = cellEl(fc);
-    const span = document.createElement('span');
-    span.className = 'fruit' + (isGolden ? ' golden' : '');
-    span.textContent = fruit;
-    fEl.appendChild(span);
-    // 모서리 글로우
+    // 먹이: 위치·종류가 바뀔 때만 재생성
+    const sig = key(foodPos) + fruit;
+    if (sig !== fruitSig) {
+      if (fruitEl) fruitEl.remove();
+      const span = document.createElement('span');
+      span.className = 'fruit' + (isGolden ? ' golden' : '');
+      span.textContent = fruit;
+      cellEl(cellOf(foodPos)).appendChild(span);
+      fruitEl = span;
+      fruitSig = sig;
+    }
+    // 모서리 글로우: 대상이 바뀔 때만 토글
     const g = glowDirection(snake[0], normal, foodPos);
+    let nge = null;
     if (g) {
       const hf = FACES[headCell.face];
       const gu = g[0]*hf.u[0] + g[1]*hf.u[1] + g[2]*hf.u[2];
       const gv = g[0]*hf.v[0] + g[1]*hf.v[1] + g[2]*hf.v[2];
       const edge = gu === 1 ? 'right' : gu === -1 ? 'left' : gv === 1 ? 'bottom' : 'top';
-      faceEls[headCell.face].edges[edge].classList.add('on');
+      nge = faceEls[headCell.face].edges[edge];
+    }
+    if (nge !== glowEl) {
+      if (glowEl) glowEl.classList.remove('on');
+      if (nge) nge.classList.add('on');
+      glowEl = nge;
     }
   }
 
@@ -929,7 +958,7 @@ if (typeof module !== 'undefined') {
       SFX.turn();
       updateCamera(); // 카메라도 즉시 회전 시작
       render(); // 눈 방향 즉시 반영
-    } else if (turnQueue.length < 2) {
+    } else if (turnQueue.length < 3) {
       turnQueue.push(t);
     }
   }
