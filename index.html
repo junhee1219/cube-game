@@ -626,13 +626,13 @@ if (typeof module !== 'undefined') {
   // 과일 개수 구간별 칭찬 멘트 (점수는 콤보 보너스 포함이라 실력 기준은 과일 개수)
   function deathMessage() {
     const head = `과일 <b>${fruits}개</b> · <b>${score}점</b>!`;
-    if (fruits >= 30) return {
+    if (score >= 150) return {
       t: '🏆 전설의 큐브 지배자!',
-      m: `과일 <b>${fruits}개</b>(${score}점)?! 이건 개발자도 못 깬 기록이에요.<br>너무 고수라서 개발자가 커피 한 잔 사겠습니다 ☕<br><a href="mailto:junhee@finda.co.kr">junhee@finda.co.kr</a> 로 연락 주세요!`,
+      m: `<b>${score}점</b>(과일 ${fruits}개)?! 이건 개발자도 못 깬 기록이에요.<br>너무 고수라서 개발자가 커피 한 잔 사겠습니다 ☕<br><a href="mailto:junhee@finda.co.kr">junhee@finda.co.kr</a> 로 연락 주세요!`,
     };
     if (fruits >= 26) return {
       t: '👑 큐브 마스터 직전!',
-      m: `${head} 무지개 뱀까지 보셨군요.<br>과일 30개를 찍으면 좋은 일이 생긴다는 소문이...`,
+      m: `${head} 무지개 뱀까지 보셨군요.<br>150점을 찍으면 좋은 일이 생긴다는 소문이...`,
     };
     if (fruits >= 16) return {
       t: '🔥 고수의 향기!',
