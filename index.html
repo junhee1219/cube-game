@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🐍 Cube Snake</title>
+<style>
+  :root {
+    --cube: 312px;       /* 한 면 크기 (6칸 × 52px) */
+    --bg: #fdf6e3;
+    --grass-a: #c8e6b0;
+    --grass-b: #b5dba0;
+    --snake: #7ec8a9;
+    --snake-head: #5fb593;
+    --glow: #ffd54f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    font-family: "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  }
+
+  /* ── 상단 점수 ── */
+  #hud {
+    margin-top: 18px; font-size: 26px; font-weight: 700; color: #8d6e63;
+    background: #fff; padding: 8px 26px; border-radius: 999px;
+    box-shadow: 0 4px 0 #ecdcc3; z-index: 10;
+  }
+
+  /* ── 3D 씬 ── */
+  #scene {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    perspective: 850px; width: 100%;
+  }
+  #cube {
+    width: var(--cube); height: var(--cube);
+    position: relative; transform-style: preserve-3d;
+  }
+  .face {
+    position: absolute; inset: 0;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(6, 1fr);
+    border-radius: 6px;
+    backface-visibility: hidden;
+  }
+  .face.front  { transform: translateZ(calc(var(--cube) / 2)); }
+  .face.back   { transform: rotateY(180deg) translateZ(calc(var(--cube) / 2)); }
+  .face.right  { transform: rotateY(90deg) translateZ(calc(var(--cube) / 2)); }
+  .face.left   { transform: rotateY(-90deg) translateZ(calc(var(--cube) / 2)); }
+  .face.top    { transform: rotateX(90deg) translateZ(calc(var(--cube) / 2)); }
+  .face.bottom { transform: rotateX(-90deg) translateZ(calc(var(--cube) / 2)); }
+
+  /* 면마다 다른 파스텔 색 — 어느 면에 있는지 한눈에 보임 */
+  .face.front  { --a: #c8e6b0; --b: #b5dba0; }  /* 풀밭 */
+  .face.top    { --a: #bfe3f7; --b: #aad6ef; }  /* 하늘 */
+  .face.right  { --a: #fcd7e3; --b: #f6c4d5; }  /* 핑크 */
+  .face.left   { --a: #ddd6f7; --b: #cdc4ef; }  /* 라벤더 */
+  .face.back   { --a: #ffe0c2; --b: #f7d1ab; }  /* 피치 */
+  .face.bottom { --a: #fdf3b3; --b: #f5e89b; }  /* 레몬 */
+  .cell { position: relative; background: var(--a); }
+  .cell.alt { background: var(--b); }
+
+  /* ── 뱀 ── */
+  .cell.body::after {
+    content: ""; position: absolute; inset: 3px;
+    background: var(--snake); border-radius: 12px;
+    box-shadow: inset 0 -4px 0 rgba(0,0,0,.08);
+  }
+  .cell.head::after {
+    content: ""; position: absolute; inset: 1px;
+    background: var(--snake-head); border-radius: 14px;
+    box-shadow: inset 0 -4px 0 rgba(0,0,0,.1);
+  }
+  .snake-face {
+    position: absolute; inset: 0; z-index: 2;
+    display: flex; flex-direction: column; align-items: center;
+    pointer-events: none;
+  }
+  .snake-face .eyes { display: flex; gap: 10px; margin-top: 7px; }
+  .snake-face .eye {
+    width: 9px; height: 11px; background: #fff; border-radius: 50%;
+    position: relative;
+  }
+  .snake-face .eye::after {
+    content: ""; position: absolute; width: 5px; height: 6px;
+    background: #33291f; border-radius: 50%; top: 1px; left: 2px;
+  }
+  .snake-face .blush { display: flex; gap: 16px; margin-top: 2px; }
+  .snake-face .cheek {
+    width: 7px; height: 4px; background: #f8a5a5; border-radius: 50%; opacity: .8;
+  }
+  .snake-face.yum .eye { height: 3px; margin-top: 5px; border-radius: 3px; background: #33291f; }
+  .snake-face.yum .eye::after { display: none; }
+  .snake-face.dead .eye { background: transparent; }
+  .snake-face.dead .eye::after {
+    content: "✕"; background: none; color: #33291f; font-size: 11px;
+    top: -3px; left: -1px; width: auto; height: auto;
+  }
+
+  /* ── 먹이 ── */
+  .cell .fruit {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 28px; z-index: 1;
+    animation: bounce 0.9s ease-in-out infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+
+  /* ── 모서리 글로우 ── */
+  .edge {
+    position: absolute; z-index: 3; border-radius: 8px;
+    opacity: 0; transition: opacity .3s; pointer-events: none;
+    background: var(--glow);
+    box-shadow: 0 0 14px 5px var(--glow);
+  }
+  .edge.on { opacity: 1; animation: twinkle 0.8s ease-in-out infinite; }
+  @keyframes twinkle {
+    0%, 100% { opacity: .55; } 50% { opacity: 1; }
+  }
+  .edge.e-top    { top: -3px; left: 8%; width: 84%; height: 6px; }
+  .edge.e-bottom { bottom: -3px; left: 8%; width: 84%; height: 6px; }
+  .edge.e-left   { left: -3px; top: 8%; height: 84%; width: 6px; }
+  .edge.e-right  { right: -3px; top: 8%; height: 84%; width: 6px; }
+
+  /* ── 하단 버튼 ── */
+  #controls {
+    width: 100%; max-width: 560px;
+    display: flex; justify-content: space-between;
+    padding: 0 28px 30px; z-index: 10;
+  }
+  .turn-btn {
+    width: 86px; height: 86px; border-radius: 50%;
+    border: none; font-size: 38px; cursor: pointer;
+    background: #ffe0ec; color: #d36c94;
+    box-shadow: 0 6px 0 #f3c2d4;
+    transition: transform .08s, box-shadow .08s;
+  }
+  .turn-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #f3c2d4; }
+  .turn-btn.cw { background: #dcefff; color: #5d92c4; box-shadow: 0 6px 0 #bcd9f2; }
+  .turn-btn.cw:active { box-shadow: 0 2px 0 #bcd9f2; }
+
+  /* ── 오버레이 ── */
+  #overlay {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(253, 246, 227, .88); backdrop-filter: blur(3px);
+    text-align: center; gap: 14px;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 { font-size: 40px; color: #8d6e63; }
+  #overlay p { font-size: 20px; color: #a1887f; }
+  #overlay button {
+    font-size: 22px; font-weight: 700; padding: 14px 44px;
+    border: none; border-radius: 999px; cursor: pointer;
+    background: #aed581; color: #fff; box-shadow: 0 6px 0 #94bf69;
+    transition: transform .08s, box-shadow .08s;
+  }
+  #overlay button:active { transform: translateY(4px); box-shadow: 0 2px 0 #94bf69; }
+
+  @media (max-width: 480px) {
+    :root { --cube: 270px; }
+    .cell .fruit { font-size: 22px; }
+    .turn-btn { width: 74px; height: 74px; font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+  <div id="hud">🍎 <span id="score">0</span></div>
+  <div id="scene"><div id="cube"></div></div>
+  <div id="controls">
+    <button class="turn-btn ccw" id="btn-left" aria-label="좌회전">↺</button>
+    <button class="turn-btn cw" id="btn-right" aria-label="우회전">↻</button>
+  </div>
+  <div id="overlay">
+    <h1>🐍 Cube Snake</h1>
+    <p>큐브 위를 기어다니며 과일을 냠냠!<br>↺ ↻ 버튼이나 ← → 키로 방향을 바꿔요</p>
+    <button id="btn-start">시작!</button>
+  </div>
+
+<script>
+/* ===== engine.js (테스트: node test.js) — 수정 시 engine.js와 동기화할 것 ===== */
+// Cube Snake — 표면 토폴로지 엔진
+// 좌표계: CSS 3D와 동일 (x 오른쪽, y 아래, z 뷰어 방향), 큐브는 [0, S]^3 (S = 2N)
+// 셀 중심: 한 좌표는 0 또는 S(면 위), 나머지 두 좌표는 홀수(1..S-1)
+// 상태: pos(셀 중심), d(진행 방향, 단위축벡터), n(면 바깥쪽 법선)
+
+const N = 6;          // 한 면의 격자 크기
+const S = 2 * N;      // 스케일된 큐브 한 변
+
+// --- 벡터 유틸 ---
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const scale = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const neg = (a) => scale(a, -1);
+const cross = (a, b) => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+const eq = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+const key = (p) => p.join(',');
+
+// --- 한 칸 전진 ---
+// 같은 면이면 pos + 2d, 모서리를 넘으면 pos + d - n (n' = d, d' = -n)
+function step(pos, d, n) {
+  const cand = add(pos, scale(d, 2));
+  const axis = d.findIndex((v) => v !== 0);
+  if (cand[axis] > 0 && cand[axis] < S) {
+    return { pos: cand, d, n };
+  }
+  return { pos: add(pos, sub(d, n)), d: neg(n), n: d };
+}
+
+// --- 회전 (뱀 기준) ---
+// 화면상 n이 뷰어를 향할 때 좌회전/우회전이 시각적 좌/우와 일치
+const turnLeft = (d, n) => cross(d, n);
+const turnRight = (d, n) => cross(n, d);
+
+// --- 면 정의 (렌더링 매핑과 공유) ---
+// u: 면 로컬 +x(열 방향), v: 면 로컬 +y(행 방향), n: 바깥 법선
+// cell(r, c) 중심 = origin + u*(2c+1) + v*(2r+1)
+const FACES = {
+  front:  { n: [0, 0, 1],  u: [1, 0, 0],  v: [0, 1, 0],  origin: [0, 0, S] },
+  back:   { n: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0],  origin: [S, 0, 0] },
+  right:  { n: [1, 0, 0],  u: [0, 0, -1], v: [0, 1, 0],  origin: [S, 0, S] },
+  left:   { n: [-1, 0, 0], u: [0, 0, 1],  v: [0, 1, 0],  origin: [0, 0, 0] },
+  top:    { n: [0, -1, 0], u: [1, 0, 0],  v: [0, 0, 1],  origin: [0, 0, 0] },
+  bottom: { n: [0, 1, 0],  u: [1, 0, 0],  v: [0, 0, -1], origin: [0, S, S] },
+};
+
+// 3D 셀 중심 → { face, r, c }
+function cellOf(pos) {
+  for (const [face, f] of Object.entries(FACES)) {
+    const rel = sub(pos, f.origin);
+    if (rel[0] * f.n[0] + rel[1] * f.n[1] + rel[2] * f.n[2] !== 0) continue;
+    const cu = rel[0] * f.u[0] + rel[1] * f.u[1] + rel[2] * f.u[2];
+    const cv = rel[0] * f.v[0] + rel[1] * f.v[1] + rel[2] * f.v[2];
+    if (cu % 2 === 1 && cv % 2 === 1 && cu > 0 && cu < S && cv > 0 && cv < S) {
+      return { face, r: (cv - 1) / 2, c: (cu - 1) / 2 };
+    }
+  }
+  return null;
+}
+
+// { face, r, c } → 3D 셀 중심
+function posOf(face, r, c) {
+  const f = FACES[face];
+  return add(f.origin, add(scale(f.u, 2 * c + 1), scale(f.v, 2 * r + 1)));
+}
+
+// 표면 전체 셀 나열 (6 * N * N개)
+function allCells() {
+  const cells = [];
+  for (const face of Object.keys(FACES))
+    for (let r = 0; r < N; r++)
+      for (let c = 0; c < N; c++) cells.push(posOf(face, r, c));
+  return cells;
+}
+
+// 셀의 표면 이웃 4개 (방향 무관, BFS용)
+function neighbors(pos, n) {
+  const out = [];
+  for (const f of Object.values(FACES)) {
+    if (eq(f.n, n) || eq(f.n, neg(n))) continue;
+    out.push(step(pos, f.n, n));
+  }
+  return out;
+}
+
+// 머리에서 먹이까지 표면 BFS → 현재 면을 벗어나는 첫 모서리 방향(면 로컬 d) 반환
+// 먹이가 같은 면이면 null
+function glowDirection(headPos, headN, foodPos) {
+  const startCell = cellOf(headPos);
+  const foodCell = cellOf(foodPos);
+  if (startCell.face === foodCell.face) return null;
+  const prev = new Map(); // key -> { from, state }
+  const start = { pos: headPos, d: null, n: headN };
+  const queue = [start];
+  prev.set(key(headPos), { from: null });
+  let found = null;
+  while (queue.length && !found) {
+    const cur = queue.shift();
+    for (const nb of neighbors(cur.pos, cur.n)) {
+      const k = key(nb.pos);
+      if (prev.has(k)) continue;
+      prev.set(k, { from: cur, state: nb });
+      if (eq(nb.pos, foodPos)) { found = nb; break; }
+      queue.push(nb);
+    }
+  }
+  if (!found) return null;
+  // 경로 역추적: 시작 면을 벗어나는 첫 스텝의 (벗어나기 직전 면 로컬 방향)을 찾는다
+  const path = [];
+  let cur = found;
+  while (cur) {
+    path.unshift(cur);
+    cur = prev.get(key(cur.pos)).from;
+  }
+  // path[0] = 머리. 면이 바뀌는 첫 지점에서, 넘어간 직후 n(= 직전 진행 방향)이 글로우 방향
+  for (let i = 1; i < path.length; i++) {
+    if (!eq(path[i].n, headN)) return path[i].n; // 모서리를 넘는 순간 n' = 이전 d
+  }
+  return null;
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    N, S, add, sub, scale, neg, cross, eq, key,
+    step, turnLeft, turnRight, FACES, cellOf, posOf, allCells, neighbors, glowDirection,
+  };
+}
+</script>
+<script>
+(() => {
+  // engine.js의 top-level 선언(N, S, step, FACES, ...)은 전역 스코프로 공유됨
+
+  // ───────────────────────── 렌더링 준비 ─────────────────────────
+  const cubeEl = document.getElementById('cube');
+  const faceEls = {};   // face → { cells: [div], edges: {top,bottom,left,right} }
+  for (const face of Object.keys(FACES)) {
+    const fEl = document.createElement('div');
+    fEl.className = `face ${face}`;
+    const cells = [];
+    for (let i = 0; i < N * N; i++) {
+      const c = document.createElement('div');
+      const r = Math.floor(i / N), col = i % N;
+      c.className = 'cell' + ((r + col) % 2 ? ' alt' : '');
+      fEl.appendChild(c);
+      cells.push(c);
+    }
+    const edges = {};
+    for (const e of ['top', 'bottom', 'left', 'right']) {
+      const el = document.createElement('div');
+      el.className = `edge e-${e}`;
+      fEl.appendChild(el);
+      edges[e] = el;
+    }
+    cubeEl.appendChild(fEl);
+    faceEls[face] = { cells, edges };
+  }
+  const cellEl = ({ face, r, c }) => faceEls[face].cells[r * N + c];
+
+  // ───────────────────────── 카메라 (쿼터니언) ─────────────────────────
+  // 목표: 머리 면의 법선 n → 화면 밖(+z), 진행 방향 d → 화면 위(-y)
+  function quatFromMatrix(m) { // m: 3x3 row-major
+    const t = m[0][0] + m[1][1] + m[2][2];
+    let w, x, y, z;
+    if (t > 0) {
+      const s = Math.sqrt(t + 1) * 2;
+      w = s / 4; x = (m[2][1] - m[1][2]) / s; y = (m[0][2] - m[2][0]) / s; z = (m[1][0] - m[0][1]) / s;
+    } else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) {
+      const s = Math.sqrt(1 + m[0][0] - m[1][1] - m[2][2]) * 2;
+      w = (m[2][1] - m[1][2]) / s; x = s / 4; y = (m[0][1] + m[1][0]) / s; z = (m[0][2] + m[2][0]) / s;
+    } else if (m[1][1] > m[2][2]) {
+      const s = Math.sqrt(1 + m[1][1] - m[0][0] - m[2][2]) * 2;
+      w = (m[0][2] - m[2][0]) / s; x = (m[0][1] + m[1][0]) / s; y = s / 4; z = (m[1][2] + m[2][1]) / s;
+    } else {
+      const s = Math.sqrt(1 + m[2][2] - m[0][0] - m[1][1]) * 2;
+      w = (m[1][0] - m[0][1]) / s; x = (m[0][2] + m[2][0]) / s; y = (m[1][2] + m[2][1]) / s; z = s / 4;
+    }
+    return [w, x, y, z];
+  }
+  function matrixFromQuat([w, x, y, z]) {
+    return [
+      [1 - 2*(y*y + z*z), 2*(x*y - w*z), 2*(x*z + w*y)],
+      [2*(x*y + w*z), 1 - 2*(x*x + z*z), 2*(y*z - w*x)],
+      [2*(x*z - w*y), 2*(y*z + w*x), 1 - 2*(x*x + y*y)],
+    ];
+  }
+  function slerp(a, b, t) {
+    let dot = a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3];
+    if (dot < 0) { b = b.map((v) => -v); dot = -dot; }
+    if (dot > 0.9995) {
+      const r = a.map((v, i) => v + t * (b[i] - v));
+      const len = Math.hypot(...r);
+      return r.map((v) => v / len);
+    }
+    const th = Math.acos(dot), s = Math.sin(th);
+    const wa = Math.sin((1 - t) * th) / s, wb = Math.sin(t * th) / s;
+    return a.map((v, i) => wa * v + wb * b[i]);
+  }
+  // 카메라 목표 회전: 단일 함수 — 모드 교체는 여기 한 곳만 수정
+  function cameraTarget(n, d) {
+    const c = cross(n, d);
+    // R = T·Sᵀ : S 열 = (n, d, n×d), T 열 = (z, -y, x)
+    const Scols = [n, d, c];
+    const Tcols = [[0, 0, 1], [0, -1, 0], [1, 0, 0]];
+    const R = [[0,0,0],[0,0,0],[0,0,0]];
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++)
+        for (let k = 0; k < 3; k++)
+          R[i][j] += Tcols[k][i] * Scols[k][j];
+    return quatFromMatrix(R);
+  }
+  const qmul = (a, b) => [
+    a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+    a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+    a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+    a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0],
+  ];
+  // 고정 기울기: 항상 윗면·옆면이 살짝 보여서 3D감 유지
+  const TX = -16 * Math.PI / 180, TY = 14 * Math.PI / 180;
+  const Q_TILT = qmul(
+    [Math.cos(TX / 2), Math.sin(TX / 2), 0, 0],
+    [Math.cos(TY / 2), 0, Math.sin(TY / 2), 0],
+  );
+
+  // 카메라 모드: 'face' = 면이 바뀔 때만 회전(화면 안정), 'heading' = 진행 방향이 항상 위(회전 많음)
+  const CAMERA_MODE = 'heading';
+  let camQuat = [1, 0, 0, 0], camTarget = [1, 0, 0, 0], camNormal = null;
+  function updateCamera() {
+    if (CAMERA_MODE === 'heading') {
+      camTarget = qmul(Q_TILT, cameraTarget(normal, dir));
+      return;
+    }
+    if (camNormal && eq(camNormal, normal)) return; // 같은 면이면 카메라 고정
+    camNormal = [...normal];
+    // 새 면의 4가지 '위' 방향 중 현재 카메라에서 회전이 가장 적은 것 선택
+    const f = Object.values(FACES).find((fc) => eq(fc.n, normal));
+    let best = camTarget, bestDot = -Infinity;
+    for (const t of [f.u, neg(f.u), f.v, neg(f.v)]) {
+      const q = qmul(Q_TILT, cameraTarget(normal, t));
+      const dq = Math.abs(q[0]*camQuat[0] + q[1]*camQuat[1] + q[2]*camQuat[2] + q[3]*camQuat[3]);
+      if (dq > bestDot) { bestDot = dq; best = q; }
+    }
+    camTarget = best;
+  }
+  function camFrame() {
+    camQuat = slerp(camQuat, camTarget, 0.10);
+    const m = matrixFromQuat(camQuat);
+    cubeEl.style.transform = `matrix3d(${m[0][0]},${m[1][0]},${m[2][0]},0,${m[0][1]},${m[1][1]},${m[2][1]},0,${m[0][2]},${m[1][2]},${m[2][2]},0,0,0,0,1)`;
+    requestAnimationFrame(camFrame);
+  }
+  requestAnimationFrame(camFrame);
+
+  // ───────────────────────── 게임 상태 ─────────────────────────
+  const FRUITS = ['🍎', '🍓', '🍒', '🍇', '🍊'];
+  let snake, dir, normal, foodPos, fruit, score, speed, turnQueue, alive, growing, yumTicks, turnedThisTick;
+  let tickTimer = null;
+
+  function reset() {
+    const startFace = 'front';
+    normal = [...FACES[startFace].n];
+    dir = [0, -1, 0]; // 위쪽으로 출발
+    snake = [posOf(startFace, 2, 3), posOf(startFace, 3, 3), posOf(startFace, 4, 3)];
+    score = 0; speed = 230; turnQueue = []; alive = true; growing = 0; yumTicks = 0; turnedThisTick = false;
+    placeFood();
+    camNormal = [...normal];
+    camTarget = qmul(Q_TILT, cameraTarget(normal, dir));
+    camQuat = [...camTarget]; // 시작 시 즉시 정렬
+    document.getElementById('score').textContent = '0';
+    render();
+  }
+
+  function placeFood() {
+    const occupied = new Set(snake.map(key));
+    const free = allCells().filter((p) => !occupied.has(key(p)));
+    foodPos = free[Math.floor(Math.random() * free.length)];
+    fruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+  }
+
+  function tick() {
+    if (!alive) return;
+    // 즉시 회전이 없었던 틱에만 큐에서 하나 적용
+    if (!turnedThisTick && turnQueue.length) {
+      const t = turnQueue.shift();
+      dir = t === 'L' ? turnLeft(dir, normal) : turnRight(dir, normal);
+    }
+    const next = step(snake[0], dir, normal);
+    dir = next.d; normal = next.n;
+
+    // 충돌: 자라지 않는 틱에는 꼬리 칸이 비워지므로 제외
+    const bodyToCheck = growing > 0 ? snake : snake.slice(0, -1);
+    if (bodyToCheck.some((p) => eq(p, next.pos))) {
+      gameOver();
+      return;
+    }
+
+    snake.unshift(next.pos);
+    if (eq(next.pos, foodPos)) {
+      score++; growing += 1; yumTicks = 3;
+      speed = Math.max(110, speed - 5);
+      document.getElementById('score').textContent = score;
+      placeFood();
+    }
+    if (growing > 0) growing--;
+    else snake.pop();
+
+    if (yumTicks > 0) yumTicks--;
+    turnedThisTick = false;
+    updateCamera();
+    render();
+    tickTimer = setTimeout(tick, speed);
+  }
+
+  function gameOver() {
+    alive = false;
+    render(); // 죽은 얼굴 표시
+    const ov = document.getElementById('overlay');
+    ov.querySelector('h1').textContent = '😵 냠냠 끝!';
+    ov.querySelector('p').innerHTML = `과일을 <b>${score}개</b> 먹었어요!<br>다시 할래?`;
+    ov.querySelector('button').textContent = '다시 하기!';
+    setTimeout(() => ov.classList.remove('hidden'), 700);
+  }
+
+  // ───────────────────────── 렌더링 ─────────────────────────
+  function render() {
+    // 셀 초기화
+    for (const { cells, edges } of Object.values(faceEls)) {
+      for (const c of cells) { c.className = c.className.replace(/ (body|head)/g, ''); c.innerHTML = ''; }
+      for (const e of Object.values(edges)) e.classList.remove('on');
+    }
+    // 몸통
+    for (let i = 1; i < snake.length; i++) cellEl(cellOf(snake[i])).className += ' body';
+    // 머리 + 표정
+    const headCell = cellOf(snake[0]);
+    const hEl = cellEl(headCell);
+    hEl.className += ' head';
+    const f = FACES[headCell.face];
+    const lu = dir[0]*f.u[0] + dir[1]*f.u[1] + dir[2]*f.u[2];
+    const lv = dir[0]*f.v[0] + dir[1]*f.v[1] + dir[2]*f.v[2];
+    const angle = Math.atan2(lu, -lv) * 180 / Math.PI;
+    const faceDiv = document.createElement('div');
+    faceDiv.className = 'snake-face' + (alive ? (yumTicks > 0 ? ' yum' : '') : ' dead');
+    faceDiv.style.transform = `rotate(${angle}deg)`;
+    faceDiv.innerHTML = '<div class="eyes"><div class="eye"></div><div class="eye"></div></div><div class="blush"><div class="cheek"></div><div class="cheek"></div></div>';
+    hEl.appendChild(faceDiv);
+    // 먹이
+    const fc = cellOf(foodPos);
+    const fEl = cellEl(fc);
+    const span = document.createElement('span');
+    span.className = 'fruit';
+    span.textContent = fruit;
+    fEl.appendChild(span);
+    // 모서리 글로우
+    const g = glowDirection(snake[0], normal, foodPos);
+    if (g) {
+      const hf = FACES[headCell.face];
+      const gu = g[0]*hf.u[0] + g[1]*hf.u[1] + g[2]*hf.u[2];
+      const gv = g[0]*hf.v[0] + g[1]*hf.v[1] + g[2]*hf.v[2];
+      const edge = gu === 1 ? 'right' : gu === -1 ? 'left' : gv === 1 ? 'bottom' : 'top';
+      faceEls[headCell.face].edges[edge].classList.add('on');
+    }
+  }
+
+  // ───────────────────────── 입력 ─────────────────────────
+  function queueTurn(t) {
+    if (!alive) return;
+    // 누르는 즉시 방향 전환 (틱당 1회) — 연타는 큐에 쌓아 다음 틱에 적용
+    if (!turnedThisTick && turnQueue.length === 0) {
+      dir = t === 'L' ? turnLeft(dir, normal) : turnRight(dir, normal);
+      turnedThisTick = true;
+      updateCamera(); // 카메라도 즉시 회전 시작
+      render(); // 눈 방향 즉시 반영
+    } else if (turnQueue.length < 2) {
+      turnQueue.push(t);
+    }
+  }
+  document.getElementById('btn-left').addEventListener('pointerdown', (e) => { e.preventDefault(); queueTurn('L'); });
+  document.getElementById('btn-right').addEventListener('pointerdown', (e) => { e.preventDefault(); queueTurn('R'); });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') { e.preventDefault(); queueTurn('L'); }
+    if (e.key === 'ArrowRight' || e.key === 'd') { e.preventDefault(); queueTurn('R'); }
+  });
+
+  document.getElementById('btn-start').addEventListener('click', () => {
+    document.getElementById('overlay').classList.add('hidden');
+    clearTimeout(tickTimer);
+    reset();
+    tickTimer = setTimeout(tick, speed);
+  });
+
+  // 첫 화면: 큐브가 보이도록 초기 상태만 렌더
+  reset();
+
+  // 테스트/디버그용 상태 조회 훅
+  window.__debug = () => ({ snake, dir, normal, foodPos, score, speed, alive });
+})();
+</script>
+</body>
+</html>
