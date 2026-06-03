@@ -182,7 +182,8 @@
   }
   #overlay.hidden { display: none; }
   #overlay h1 { font-size: 40px; color: #8d6e63; }
-  #overlay p { font-size: 20px; color: #a1887f; }
+  #overlay p { font-size: 20px; color: #a1887f; line-height: 1.5; }
+  #overlay a { color: #e57373; font-weight: 700; }
   #overlay button {
     font-size: 22px; font-weight: 700; padding: 14px 44px;
     border: none; border-radius: 999px; cursor: pointer;
@@ -532,12 +533,41 @@ if (typeof module !== 'undefined') {
     tickTimer = setTimeout(tick, speed);
   }
 
+  // 점수 구간별 칭찬 멘트
+  function deathMessage() {
+    if (score >= 30) return {
+      t: '🏆 전설의 큐브 지배자!',
+      m: `과일 <b>${score}개</b>?! 이건 개발자도 못 깬 기록이에요.<br>너무 고수라서 개발자가 커피 한 잔 사겠습니다 ☕<br><a href="mailto:junhee@finda.co.kr">junhee@finda.co.kr</a> 로 연락 주세요!`,
+    };
+    if (score >= 26) return {
+      t: '👑 큐브 마스터 직전!',
+      m: `과일 <b>${score}개</b>! 무지개 뱀까지 보셨군요.<br>30개를 찍으면 좋은 일이 생긴다는 소문이...`,
+    };
+    if (score >= 16) return {
+      t: '🔥 고수의 향기!',
+      m: `과일 <b>${score}개</b>! 모서리를 넘나드는 솜씨가<br>예사롭지 않은데요?`,
+    };
+    if (score >= 6) return {
+      t: '🍀 제법인데요?',
+      m: `과일 <b>${score}개</b>! 큐브가 슬슬<br>만만해 보이기 시작했죠?`,
+    };
+    if (score >= 1) return {
+      t: '🌱 냠냠 입문 완료!',
+      m: `과일 <b>${score}개</b>! 몸풀기는 끝.<br>이제 진짜 실력을 보여줄 시간이에요`,
+    };
+    return {
+      t: '🥚 음...',
+      m: `과일은 장식이 아니에요! 🥲<br>딱 한 입만 먹어봐요`,
+    };
+  }
+
   function gameOver() {
     alive = false;
     render(); // 죽은 얼굴 표시
     const ov = document.getElementById('overlay');
-    ov.querySelector('h1').textContent = '😵 냠냠 끝!';
-    ov.querySelector('p').innerHTML = `과일을 <b>${score}개</b> 먹었어요!<br>다시 할래?`;
+    const { t, m } = deathMessage();
+    ov.querySelector('h1').textContent = t;
+    ov.querySelector('p').innerHTML = m;
     ov.querySelector('button').textContent = '다시 하기!';
     setTimeout(() => ov.classList.remove('hidden'), 700);
   }
@@ -720,6 +750,7 @@ if (typeof module !== 'undefined') {
   // 테스트/디버그용 훅
   window.__debug = () => ({ snake, dir, normal, foodPos, score, speed, alive });
   window.__testFx = (s) => { score = s; document.getElementById('score').textContent = s; render(); eatEffect(); };
+  window.__testOver = (s) => { score = s; gameOver(); };
 })();
 </script>
 </body>
