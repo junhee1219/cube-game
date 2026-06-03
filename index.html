@@ -11,6 +11,14 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="🐍 Cube Snake — 큐브 위를 달리는 스네이크">
+<meta property="og:description" content="3D 큐브 표면을 기어다니는 귀여운 스네이크 게임. 150점 넘기면 개발자가 커피 쏨 ☕">
+<meta property="og:image" content="https://junhee1219.github.io/cube-game/og/main.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://junhee1219.github.io/cube-game/">
+<meta name="twitter:card" content="summary_large_image">
 <title>🐍 Cube Snake</title>
 <style>
   :root {
@@ -242,6 +250,16 @@
   }
   #overlay button:active { transform: translateY(4px); box-shadow: 0 2px 0 #94bf69; }
 
+  /* ── 자랑하기 (게임오버 화면에만) ── */
+  #btn-share {
+    display: none;
+    font-size: 16px !important; padding: 10px 28px !important;
+    background: #ffd180 !important; color: #8d5524 !important;
+    box-shadow: 0 5px 0 #efb96a !important;
+  }
+  #btn-share:active { box-shadow: 0 2px 0 #efb96a !important; }
+  #overlay.gameover #btn-share { display: inline-block; }
+
   /* ── 간식 사주기 (게임오버 화면에만, 은은하게) ── */
   #snack { display: none; margin-top: 22px; font-size: 13px; color: #bcaaa4; }
   #overlay.gameover #snack { display: block; }
@@ -276,6 +294,7 @@
     <h1>🐍 Cube Snake</h1>
     <p>큐브 위를 기어다니며 과일을 냠냠!<br>↺ ↻ 버튼이나 ← → 키로 방향을 바꿔요</p>
     <button id="btn-start">시작!</button>
+    <button id="btn-share">📤 친구에게 자랑하기</button>
     <div id="snack">
       <span class="snack-label">재밌었다면 개발자 간식 사주기</span> 🍩
       <span class="snack-btns">
@@ -947,6 +966,33 @@ if (typeof module !== 'undefined') {
       for (let i = 0; i < 4; i++) setTimeout(firework, 120 + i * 160);
     }
   }
+
+  // ───────────────────────── 자랑하기 ─────────────────────────
+  const SITE = 'https://junhee1219.github.io/cube-game';
+  // 공유 카드 티어 (deathMessage와 동일 기준)
+  function shareTier() {
+    if (score >= 150) return 'trophy';
+    if (fruits >= 26) return 'crown';
+    if (fruits >= 16) return 'fire';
+    if (fruits >= 6) return 'clover';
+    if (fruits >= 1) return 'sprout';
+    return 'egg';
+  }
+  const shareBtn = document.getElementById('btn-share');
+  shareBtn.addEventListener('click', async () => {
+    const url = `${SITE}/share/${shareTier()}.html`;
+    const text = `🐍 큐브스네이크 ${score}점 (과일 ${fruits}개)! 나를 이겨봐 ㅋㅋ`;
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    try {
+      if (navigator.share && isMobile) {
+        await navigator.share({ title: 'Cube Snake', text, url }); // 모바일: 네이티브 공유창 (카톡 바로 선택)
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        shareBtn.textContent = '✅ 복사 완료! 카톡에 붙여넣기';
+        setTimeout(() => { shareBtn.textContent = '📤 친구에게 자랑하기'; }, 2000);
+      }
+    } catch (e) { /* 공유 취소 시 무시 */ }
+  });
 
   // ───────────────────────── 입력 ─────────────────────────
   function queueTurn(t) {
