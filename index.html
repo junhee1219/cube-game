@@ -667,7 +667,27 @@ if (typeof module !== 'undefined') {
     updateCamera();
     render();
     if (ate) eatEffect(gained, wasGolden); // render 후에 호출해야 머리 위치가 정확함
-    tickTimer = setTimeout(tick, speed);
+  }
+
+  // 벽시계 기반 게임 루프.
+  // setTimeout(tick, speed)로 직접 재귀하면 타이머를 가속하는 봇이 게임을 빠르게 돌릴 수 있음.
+  // 대신 자주 깨어나되 performance.now() 기준 speed가 실제로 흘렀을 때만 한 칸 진행 →
+  // 타이머만 가속한 봇은 무력화되고, 기기/프레임레이트와 무관하게 속도가 일정해짐.
+  // (시계 자체를 후킹하는 정교한 봇까지 막진 못함 — 그건 서버 검증 영역)
+  let lastStepTime = 0;
+  function loop() {
+    if (!alive) return;
+    const now = performance.now();
+    if (now >= lastStepTime + speed) {
+      lastStepTime = now;
+      tick();
+    }
+    if (alive) tickTimer = setTimeout(loop, Math.max(0, lastStepTime + speed - performance.now()));
+  }
+  function startLoop() {
+    lastStepTime = performance.now();
+    clearTimeout(tickTimer);
+    tickTimer = setTimeout(loop, speed);
   }
 
   // 과일 개수 구간별 칭찬 멘트 (점수는 콤보 보너스 포함이라 실력 기준은 과일 개수)
@@ -1018,9 +1038,8 @@ if (typeof module !== 'undefined') {
   document.getElementById('btn-start').addEventListener('click', () => {
     ensureAudio(); // 사용자 제스처에서 오디오 활성화 (iOS 필수)
     document.getElementById('overlay').classList.add('hidden');
-    clearTimeout(tickTimer);
     reset();
-    tickTimer = setTimeout(tick, speed);
+    startLoop();
   });
 
   // 최고 기록 표시 초기화
@@ -1034,11 +1053,13 @@ if (typeof module !== 'undefined') {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
-  // 테스트/디버그용 훅
-  window.__debug = () => ({ snake, dir, normal, foodPos, score, speed, alive, fruits, combo, maxCombo, isGolden,
-    audio: { muted, state: actx && actx.state, masterVol: masterGain && masterGain.gain.value } });
-  window.__testFx = (s) => { score = s; document.getElementById('score').textContent = s; render(); eatEffect(); };
-  window.__testOver = (s, f = s) => { score = s; fruits = f; gameOver(); };
+  // 테스트/디버그용 훅 — 로컬 개발 환경에서만 노출 (배포 페이지에선 정의 안 됨)
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    window.__debug = () => ({ snake, dir, normal, foodPos, score, speed, alive, fruits, combo, maxCombo, isGolden, tickCount,
+      audio: { muted, state: actx && actx.state, masterVol: masterGain && masterGain.gain.value } });
+    window.__testFx = (s) => { score = s; document.getElementById('score').textContent = s; render(); eatEffect(); };
+    window.__testOver = (s, f = s) => { score = s; fruits = f; gameOver(); };
+  }
 })();
 </script>
 </body>
