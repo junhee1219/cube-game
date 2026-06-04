@@ -273,6 +273,34 @@
   #snack a.toss { background: #3182f6; color: #fff; }
   #snack a.kakao { background: #fee500; color: #3c1e1e; }
 
+  /* ── 고마워요 모달 (PC 딥링크 fallback) ── */
+  #thanks {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(141, 110, 99, .35); backdrop-filter: blur(4px);
+    animation: fadein .2s ease;
+  }
+  #thanks.hidden { display: none; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  .thanks-card {
+    background: #fffdf7; border-radius: 28px; padding: 32px 30px;
+    max-width: 340px; width: 86%; text-align: center;
+    box-shadow: 0 10px 0 #ecdcc3, 0 18px 40px rgba(0,0,0,.15);
+    animation: pop-in .3s cubic-bezier(.2,1.2,.4,1);
+  }
+  @keyframes pop-in { from { transform: scale(.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .thanks-emoji { font-size: 56px; margin-bottom: 8px; }
+  .thanks-card h2 { font-size: 24px; color: #8d6e63; margin-bottom: 14px; }
+  .thanks-card p { font-size: 16px; color: #a1887f; line-height: 1.55; }
+  .thanks-card .thanks-sub { font-size: 13px; color: #c5b3a6; margin-top: 12px; }
+  #thanks-close {
+    margin-top: 22px; font-size: 18px; font-weight: 700; padding: 12px 36px;
+    border: none; border-radius: 999px; cursor: pointer;
+    background: #aed581; color: #fff; box-shadow: 0 5px 0 #94bf69;
+    transition: transform .08s, box-shadow .08s;
+  }
+  #thanks-close:active { transform: translateY(3px); box-shadow: 0 2px 0 #94bf69; }
+
   @media (max-width: 480px) {
     :root { --cube: 270px; }
     .cell .fruit { font-size: 22px; }
@@ -301,6 +329,17 @@
         <a class="toss" href="supertoss://send?bank=토스뱅크&accountNo=100025266940&amount=3000">토스</a>
         <a class="kakao" href="https://qr.kakaopay.com/FP0dZW9ip" target="_blank" rel="noopener">카카오페이</a>
       </span>
+    </div>
+  </div>
+
+  <!-- PC에서 앱 딥링크가 안 열릴 때 띄우는 "마음만으로도 고마워요" 모달 -->
+  <div id="thanks" class="hidden">
+    <div class="thanks-card">
+      <div class="thanks-emoji">🥹☕</div>
+      <h2>마음만으로도 감동이에요!</h2>
+      <p>송금은 폰에서 열어야 동작하지만,<br>여기까지 눌러주신 것만으로도<br>개발자는 이미 커피 한 잔 마신 기분이에요 💛</p>
+      <p class="thanks-sub">정 보내고 싶다면 폰으로 접속해서 눌러주세요!</p>
+      <button id="thanks-close">고마워요 😊</button>
     </div>
   </div>
 
@@ -989,6 +1028,19 @@ if (typeof module !== 'undefined') {
 
   // ───────────────────────── 자랑하기 ─────────────────────────
   const SITE = 'https://junhee1219.github.io/cube-game';
+  const isMobile = () => /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+  // 간식 딥링크: PC에선 앱 스킴이 안 열리므로 "고마워요" 모달로 대체
+  const thanksModal = document.getElementById('thanks');
+  function openThanks() { thanksModal.classList.remove('hidden'); }
+  function closeThanks() { thanksModal.classList.add('hidden'); }
+  document.getElementById('thanks-close').addEventListener('click', closeThanks);
+  thanksModal.addEventListener('click', (e) => { if (e.target === thanksModal) closeThanks(); });
+  document.querySelectorAll('#snack a').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      if (!isMobile()) { e.preventDefault(); openThanks(); } // PC: 링크 막고 모달
+    });
+  });
   // 공유 카드 티어 (deathMessage와 동일 기준)
   function shareTier() {
     if (score >= 150) return 'trophy';
@@ -1002,9 +1054,8 @@ if (typeof module !== 'undefined') {
   shareBtn.addEventListener('click', async () => {
     const url = `${SITE}/share/${shareTier()}.html`;
     const text = `🐍 큐브스네이크 ${score}점 (과일 ${fruits}개)! 나를 이겨봐 ㅋㅋ`;
-    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
     try {
-      if (navigator.share && isMobile) {
+      if (navigator.share && isMobile()) {
         await navigator.share({ title: 'Cube Snake', text, url }); // 모바일: 네이티브 공유창 (카톡 바로 선택)
       } else {
         await navigator.clipboard.writeText(`${text}\n${url}`);
