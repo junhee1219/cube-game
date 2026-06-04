@@ -112,6 +112,7 @@
   #scene {
     flex: 1; display: flex; align-items: center; justify-content: center;
     perspective: 850px; width: 100%;
+    touch-action: none; /* 스와이프가 브라우저 스크롤/제스처에 가로채이지 않게 */
   }
   #cube {
     width: var(--cube); height: var(--cube);
@@ -1200,6 +1201,28 @@ if (typeof module !== 'undefined') {
     if (e.key === 'ArrowLeft' || e.key === 'a') { e.preventDefault(); queueTurn('L'); }
     if (e.key === 'ArrowRight' || e.key === 'd') { e.preventDefault(); queueTurn('R'); }
   });
+
+  // 가운데(큐브 영역) 좌우 스와이프 — 모바일 한 손 조작
+  (function swipeControl() {
+    const scene = document.getElementById('scene');
+    const SWIPE_MIN = 30; // 회전으로 인정할 최소 가로 이동(px)
+    let startX = null, startY = null, fired = false;
+    scene.addEventListener('pointerdown', (e) => {
+      startX = e.clientX; startY = e.clientY; fired = false;
+    });
+    scene.addEventListener('pointermove', (e) => {
+      if (startX === null || fired) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      // 가로 우세 + 임계값 넘으면 회전 (한 번의 스와이프에 한 번만)
+      if (Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(dy)) {
+        queueTurn(dx < 0 ? 'L' : 'R');
+        fired = true; // 손 뗄 때까지 추가 발동 막음
+      }
+    });
+    const end = () => { startX = startY = null; };
+    scene.addEventListener('pointerup', end);
+    scene.addEventListener('pointercancel', end);
+  })();
 
   document.getElementById('btn-start').addEventListener('click', () => {
     ensureAudio(); // 사용자 제스처에서 오디오 활성화 (iOS 필수)
